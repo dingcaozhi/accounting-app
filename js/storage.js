@@ -1,188 +1,108 @@
 /**
- * Supabase 云端存储模块
+ * 本地存储模块 - LocalStorage Module
  */
 
 const Storage = {
-    // 获取当前用户ID
-    getUserId() {
-        return Auth.getUserId();
+    // 获取当前用户的数据命名空间
+    getNamespace() {
+        const user = Auth.getCurrentUser();
+        return user ? `accounting_${user.username}` : 'accounting_guest';
     },
 
-    // 获取 Supabase 客户端
-    db() {
-        return getSupabase();
-    },
-
-    // ========== 记录操作 ==========
-    
-    // 获取所有记录
-    async getRecords() {
-        const userId = this.getUserId();
-        if (!userId) return [];
+    // 获取完整的数据结构
+    getData() {
+        const namespace = this.getNamespace();
+        const defaultData = {
+            records: [],
+            categories: {
+                expense: ['餐饮', '交通', '购物', '娱乐', '居住', '医疗', '教育', '其他'],
+                income: ['工资', '奖金', '投资', '兼职', '红包', '其他']
+            },
+            settings: {
+                currency: 'CNY',
+                theme: 'light'
+            }
+        };
         
         try {
-            const { data, error } = await this.db()
-                .from('records')
-                .select('*')
-                .order('date', { ascending: false });
-            
-            if (error) throw error;
-            return data || [];
+            const data = localStorage.getItem(namespace);
+            return data ? JSON.parse(data) : defaultData;
         } catch (e) {
-            console.error('Get records error:', e);
-            return [];
+            console.error('Storage getData error:', e);
+            return defaultData;
         }
+    },
+
+    // 保存数据
+    saveData(data) {
+        const namespace = this.getNamespace();
+        try {
+            localStorage.setItem(namespace, JSON.stringify(data));
+            return true;
+        } catch (e) {
+            console.error('Storage saveData error:', e);
+            return false;
+        }
+    },
+
+    // 获取所有记录
+    getRecords() {
+        return this.getData().records;
     },
 
     // 添加记录
-    async addRecord(record) {
-        const userId = this.getUserId();
-        if (!userId) return false;
-        
-        try {
-            const { data, error } = await this.db()
-                .from('records')
-                .insert([{
-                    user_id: userId,
-                    type: record.type,
-                    amount: record.amount,
-                    category: record.category,
-                    date: record.date,
-                    remark: record.remark
-                }]);
-            
-            if (error) throw error;
-            return true;
-        } catch (e) {
-            console.error('Add record error:', e);
-            return false;
-        }
+    addRecord(record) {
+        const data = this.getData();
+        record.id = Date.now().toString();
+        record.createdAt = new Date().toISOString();
+        data.records.unshift(record);
+        return this.saveData(data);
     },
 
     // 删除记录
-    async deleteRecord(id) {
-        try {
-            const { error } = await this.db()
-                .from('records')
-                .delete()
-                .eq('id', id);
-            
-            if (error) throw error;
-            return true;
-        } catch (e) {
-            console.error('Delete record error:', e);
-            return false;
-        }
+    deleteRecord(id) {
+        const data = this.getData();
+        data.records = data.records.filter(r => r.id !== id);
+        return this.saveData(data);
     },
 
     // 更新记录
-    async updateRecord(id, updates) {
-        try {
-            const { error } = await this.db()
-                .from('records')
-                .update(updates)
-                .eq('id', id);
-            
-            if (error) throw error;
-            return true;
-        } catch (e) {
-            console.error('Update record error:', e);
-            return false;
+    updateRecord(id, updates) {
+        const data = this.getData();
+        const index = data.records.findIndex(r => r.id === id);
+        if (index !== -1) {
+            data.records[index] = { ...data.records[index], ...updates };
+            return this.saveData(data);
         }
+        return false;
     },
 
-    // ========== 分类操作 ==========
-    
     // 获取分类
-    async getCategories(type) {
-        const userId = this.getUserId();
-        if (!userId) {
-            // 返回默认分类
-            return type === 'expense' 
-                ? ['餐饮', '交通', '购物', '娱乐', '居住', '医疗', '教育', '其他']
-                : ['工资', '奖金', '投资', '兼职', '红包', '其他'];
-        }
-        
-        try {
-            let query = this.db()
-                .from('categories')
-                .select('name')
-                .order('created_at');
-            
-            if (type) {
-                query = query.eq('type', type);
-            }
-            
-            const { data, error } = await query;
-            
-            if (error) throw error;
-            
-            if (type) {
-                return data.map(c => c.name);
-            }
-            
-            return {
-                expense: data.filter(c => c.type === 'expense').map(c => c.name),
-                income: data.filter(c => c.type === 'income').map(c => c.name)
-            };
-        } catch (e) {
-            console.error('Get categories error:', e);
-            return type === 'expense' 
-                ? ['餐饮', '交通', '购物', '娱乐', '居住', '医疗', '教育', '其他']
-                : ['工资', '奖金', '投资', '兼职', '红包', '其他'];
-        }
+    getCategories(type) {
+        const data = this.getData();
+        return type ? data.categories[type] : data.categories;
     },
 
     // 添加分类
-    async addCategory(type, name) {
-        const userId = this.getUserId();
-        if (!userId) return false;
-        
-        try {
-            const { error } = await this.db()
-                .from('categories')
-                .insert([{
-                    user_id: userId,
-                    type: type,
-                    name: name
-                }]);
-            
-            if (error) {
-                if (error.code === '23505') {
-                    alert('分类已存在');
-                    return false;
-                }
-                throw error;
-            }
-            return true;
-        } catch (e) {
-            console.error('Add category error:', e);
-            return false;
+    addCategory(type, name) {
+        const data = this.getData();
+        if (!data.categories[type].includes(name)) {
+            data.categories[type].push(name);
+            return this.saveData(data);
         }
+        return false;
     },
 
     // 删除分类
-    async deleteCategory(type, name) {
-        try {
-            const { error } = await this.db()
-                .from('categories')
-                .delete()
-                .eq('type', type)
-                .eq('name', name);
-            
-            if (error) throw error;
-            return true;
-        } catch (e) {
-            console.error('Delete category error:', e);
-            return false;
-        }
+    deleteCategory(type, name) {
+        const data = this.getData();
+        data.categories[type] = data.categories[type].filter(c => c !== name);
+        return this.saveData(data);
     },
 
-    // ========== 统计操作 ==========
-    
     // 获取统计数据
-    async getStats() {
-        const records = await this.getRecords();
+    getStats() {
+        const records = this.getRecords();
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
@@ -209,20 +129,9 @@ const Storage = {
         };
     },
 
-    // ========== 数据导出/导入 ==========
-    
     // 导出数据
-    async exportData() {
-        const records = await this.getRecords();
-        const categories = await this.getCategories();
-        
-        const data = {
-            records,
-            categories,
-            exportDate: new Date().toISOString(),
-            version: '2.0'
-        };
-        
+    exportData() {
+        const data = this.getData();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -235,26 +144,14 @@ const Storage = {
         return true;
     },
 
-    // 导入数据（批量插入）
-    async importData(jsonString) {
+    // 导入数据
+    importData(jsonString) {
         try {
             const data = JSON.parse(jsonString);
-            if (!data.records || !Array.isArray(data.records)) {
-                return false;
+            if (data.records && data.categories) {
+                return this.saveData(data);
             }
-            
-            // 批量导入记录
-            for (const record of data.records) {
-                await this.addRecord({
-                    type: record.type,
-                    amount: record.amount,
-                    category: record.category,
-                    date: record.date,
-                    remark: record.remark || ''
-                });
-            }
-            
-            return true;
+            return false;
         } catch (e) {
             console.error('Import error:', e);
             return false;
@@ -262,27 +159,9 @@ const Storage = {
     },
 
     // 清除所有数据
-    async clearAllData() {
-        const userId = this.getUserId();
-        if (!userId) return false;
-        
-        try {
-            // 删除所有记录
-            await this.db()
-                .from('records')
-                .delete()
-                .eq('user_id', userId);
-            
-            // 删除自定义分类（保留默认分类）
-            await this.db()
-                .from('categories')
-                .delete()
-                .eq('user_id', userId);
-            
-            return true;
-        } catch (e) {
-            console.error('Clear data error:', e);
-            return false;
-        }
+    clearAllData() {
+        const namespace = this.getNamespace();
+        localStorage.removeItem(namespace);
+        return true;
     }
 };

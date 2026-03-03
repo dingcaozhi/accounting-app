@@ -1,73 +1,41 @@
 /**
- * 主应用逻辑 - Main App
+ * 主应用逻辑 - Main App (本地存储版本)
  */
 
 const app = {
     currentFilter: 'all',
     currentCategoryType: 'expense',
 
-    // 初始化
-    async init() {
-        // 等待 Supabase 加载
-        await this.waitForSupabase();
-        
+    init() {
+        Auth.init();
+        this.checkAuth();
         this.bindEvents();
-        await this.checkAuth();
     },
 
-    // 等待 Supabase 加载
-    waitForSupabase() {
-        return new Promise((resolve) => {
-            const check = () => {
-                if (window.supabase) {
-                    resolve();
-                } else {
-                    setTimeout(check, 100);
-                }
-            };
-            check();
-        });
-    },
-
-    // 检查登录状态
-    async checkAuth() {
-        await Auth.init();
-        
+    checkAuth() {
         if (Auth.isLoggedIn()) {
-            await this.showMainPage();
+            this.showMainPage();
         } else {
             this.showAuthPage();
         }
     },
 
-    // 显示登录页
     showAuthPage() {
         document.getElementById('authPage').classList.remove('hidden');
         document.getElementById('mainPage').classList.add('hidden');
     },
 
-    // 显示主页面
-    async showMainPage() {
+    showMainPage() {
         document.getElementById('authPage').classList.add('hidden');
         document.getElementById('mainPage').classList.remove('hidden');
         
         const user = Auth.getCurrentUser();
         document.getElementById('currentUser').textContent = user ? user.username : 'User';
         
-        await this.updateStats();
-        await this.renderRecords();
+        this.updateStats();
+        this.renderRecords();
     },
 
-    // 认证状态变化回调
-    async onAuthChange(isLoggedIn) {
-        if (isLoggedIn) {
-            await this.showMainPage();
-        } else {
-            this.showAuthPage();
-        }
-    },
-
-    // 绑定事件
     bindEvents() {
         // 登录/注册标签切换
         document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -78,15 +46,15 @@ const app = {
         });
 
         // 登录表单
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            await this.handleLogin();
+            this.handleLogin();
         });
 
         // 注册表单
-        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        document.getElementById('registerForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            await this.handleRegister();
+            this.handleRegister();
         });
 
         // 筛选标签
@@ -105,9 +73,9 @@ const app = {
         });
 
         // 添加记录表单
-        document.getElementById('addForm').addEventListener('submit', async (e) => {
+        document.getElementById('addForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            await this.handleAddRecord();
+            this.handleAddRecord();
         });
 
         // 分类管理标签
@@ -119,7 +87,6 @@ const app = {
         });
     },
 
-    // 切换登录/注册标签
     switchAuthTab(tab) {
         document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
         document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
@@ -133,55 +100,56 @@ const app = {
         }
     },
 
-    // 处理登录
-    async handleLogin() {
+    handleLogin() {
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         
-        const result = await Auth.login(email, password);
+        const result = Auth.login(email, password);
         
         if (result.success) {
-            await this.showMainPage();
+            this.showMainPage();
             document.getElementById('loginForm').reset();
         } else {
             alert(result.message);
         }
     },
 
-    // 处理注册
-    async handleRegister() {
+    handleRegister() {
         const email = document.getElementById('regEmail').value.trim();
         const username = document.getElementById('regUsername').value.trim();
         const password = document.getElementById('regPassword').value;
         
-        const result = await Auth.register(email, password, username);
+        if (!username) {
+            alert('请输入用户名');
+            return;
+        }
+        
+        const result = Auth.register(email, password, username);
         
         if (result.success) {
             alert(result.message);
-            this.switchAuthTab('login');
+            this.showMainPage();
             document.getElementById('registerForm').reset();
         } else {
             alert(result.message);
         }
     },
 
-    // 退出登录
-    async logout() {
+    logout() {
         if (confirm('确定要退出登录吗？')) {
-            await Auth.logout();
+            Auth.logout();
+            this.showAuthPage();
         }
     },
 
-    // 更新统计数据
-    async updateStats() {
-        const stats = await Storage.getStats();
+    updateStats() {
+        const stats = Storage.getStats();
         
         document.getElementById('monthIncome').textContent = `¥${stats.monthIncome.toFixed(2)}`;
         document.getElementById('monthExpense').textContent = `¥${stats.monthExpense.toFixed(2)}`;
         document.getElementById('monthBalance').textContent = `¥${stats.monthBalance.toFixed(2)}`;
     },
 
-    // 切换筛选
     switchFilter(filter) {
         this.currentFilter = filter;
         
@@ -191,53 +159,49 @@ const app = {
         this.renderRecords();
     },
 
-    // 渲染记录列表
-    async renderRecords() {
+    renderRecords() {
         const container = document.getElementById('recordsList');
-        const records = await Storage.getRecords();
+        let records = Storage.getRecords();
         
-        // 筛选
-        let filteredRecords = records;
         if (this.currentFilter !== 'all') {
-            filteredRecords = records.filter(r => r.type === this.currentFilter);
+            records = records.filter(r => r.type === this.currentFilter);
         }
         
-        if (filteredRecords.length === 0) {
+        if (records.length === 0) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">📝</div>
-                    <h3>还没有记录</h3>
-                    <p>点击下方的按钮记一笔吧</p>
-                </div>
+                \u003cdiv class="empty-state">
+                    \u003cdiv class="empty-state-icon">📝\u003c/div>
+                    \u003ch3>还没有记录\u003c/h3>
+                    \u003cp>点击下方的按钮记一笔吧\u003c/p>
+                \u003c/div>
             `;
             return;
         }
         
-        container.innerHTML = filteredRecords.map(record => {
+        container.innerHTML = records.map(record => {
             const icon = Categories.getIcon(record.category);
             const amountClass = record.type === 'income' ? 'income' : 'expense';
             const amountSign = record.type === 'income' ? '+' : '-';
             
             return `
-                <div class="record-item ${record.type}">
-                    <div class="record-icon">${icon}</div>
-                    <div class="record-info">
-                        <div class="record-category">${record.category}</div>
-                        ${record.remark ? `<div class="record-remark">${record.remark}</div>` : ''}
-                        <div class="record-date">${this.formatDate(record.date)}</div>
-                    </div>
-                    <div class="record-amount ${amountClass}">
+                \u003cdiv class="record-item ${record.type}">
+                    \u003cdiv class="record-icon">${icon}\u003c/div>
+                    \u003cdiv class="record-info">
+                        \u003cdiv class="record-category">${record.category}\u003c/div>
+                        ${record.remark ? `\u003cdiv class="record-remark">${record.remark}\u003c/div>` : ''}
+                        \u003cdiv class="record-date">${this.formatDate(record.date)}\u003c/div>
+                    \u003c/div>
+                    \u003cdiv class="record-amount ${amountClass}">
                         ${amountSign}¥${parseFloat(record.amount).toFixed(2)}
-                    </div>
-                    <div class="record-actions">
-                        <button class="btn-delete" onclick="app.confirmDelete('${record.id}')">🗑️</button>
-                    </div>
-                </div>
+                    \u003c/div>
+                    \u003cdiv class="record-actions">
+                        \u003cbutton class="btn-delete" onclick="app.confirmDelete('${record.id}')">🗑️\u003c/button>
+                    \u003c/div>
+                \u003c/div>
             `;
         }).join('');
     },
 
-    // 格式化日期
     formatDate(dateString) {
         const date = new Date(dateString);
         const today = new Date();
@@ -253,33 +217,21 @@ const app = {
         }
     },
 
-    // 显示添加弹窗
-    async showAddModal(type) {
+    showAddModal(type) {
         document.getElementById('modalTitle').textContent = type === 'expense' ? '记支出' : '记收入';
-        
-        // 设置类型
         document.querySelector(`input[name="type"][value="${type}"]`).checked = true;
-        
-        // 渲染分类
-        await Categories.renderCategorySelector(type);
-        
-        // 设置默认日期为今天
+        Categories.renderCategorySelector(type);
         document.getElementById('date').value = new Date().toISOString().split('T')[0];
-        
-        // 清空表单
         document.getElementById('amount').value = '';
         document.getElementById('remark').value = '';
-        
         document.getElementById('addModal').classList.remove('hidden');
     },
 
-    // 关闭添加弹窗
     closeAddModal() {
         document.getElementById('addModal').classList.add('hidden');
     },
 
-    // 处理添加记录
-    async handleAddRecord() {
+    handleAddRecord() {
         const type = document.querySelector('input[name="type"]:checked').value;
         const amount = document.getElementById('amount').value;
         const category = document.getElementById('category').value;
@@ -299,47 +251,40 @@ const app = {
             remark
         };
         
-        const success = await Storage.addRecord(record);
-        
-        if (success) {
+        if (Storage.addRecord(record)) {
             this.closeAddModal();
-            await this.updateStats();
-            await this.renderRecords();
+            this.updateStats();
+            this.renderRecords();
         } else {
             alert('保存失败，请重试');
         }
     },
 
-    // 确认删除
-    async confirmDelete(id) {
+    confirmDelete(id) {
         if (confirm('确定要删除这条记录吗？')) {
-            await Storage.deleteRecord(id);
-            await this.updateStats();
-            await this.renderRecords();
+            Storage.deleteRecord(id);
+            this.updateStats();
+            this.renderRecords();
         }
     },
 
-    // 显示分类管理
-    async showCategoryManager() {
+    showCategoryManager() {
         this.currentCategoryType = 'expense';
         this.renderCategoryTabs();
-        await Categories.renderCategoryList('expense');
+        Categories.renderCategoryList('expense');
         document.getElementById('categoryModal').classList.remove('hidden');
     },
 
-    // 关闭分类管理
     closeCategoryModal() {
         document.getElementById('categoryModal').classList.add('hidden');
     },
 
-    // 切换分类标签
     switchCategoryTab(type) {
         this.currentCategoryType = type;
         this.renderCategoryTabs();
         Categories.renderCategoryList(type);
     },
 
-    // 渲染分类标签
     renderCategoryTabs() {
         document.querySelectorAll('.category-tab').forEach(tab => {
             tab.classList.remove('active');
@@ -349,8 +294,7 @@ const app = {
         });
     },
 
-    // 添加分类
-    async addCategory() {
+    addCategory() {
         const name = document.getElementById('newCategoryName').value.trim();
         
         if (!name) {
@@ -358,59 +302,53 @@ const app = {
             return;
         }
         
-        const result = await Categories.add(this.currentCategoryType, name);
+        const result = Categories.add(this.currentCategoryType, name);
         
         if (result.success) {
             document.getElementById('newCategoryName').value = '';
-            await Categories.renderCategoryList(this.currentCategoryType);
+            Categories.renderCategoryList(this.currentCategoryType);
         } else {
             alert(result.message);
         }
     },
 
-    // 删除分类
-    async deleteCategory(type, name) {
+    deleteCategory(type, name) {
         if (!confirm(`确定要删除分类"${name}"吗？`)) {
             return;
         }
         
-        const result = await Categories.remove(type, name);
+        const result = Categories.remove(type, name);
         
         if (result.success) {
-            await Categories.renderCategoryList(type);
+            Categories.renderCategoryList(type);
         } else {
             alert(result.message);
         }
     },
 
-    // 显示设置
     showSettings() {
         document.getElementById('settingsModal').classList.remove('hidden');
     },
 
-    // 关闭设置
     closeSettingsModal() {
         document.getElementById('settingsModal').classList.add('hidden');
     },
 
-    // 导出数据
-    async exportData() {
-        await Storage.exportData();
+    exportData() {
+        Storage.exportData();
         this.closeSettingsModal();
     },
 
-    // 导入数据
-    async importData(input) {
+    importData(input) {
         const file = input.files[0];
         if (!file) return;
         
         const reader = new FileReader();
-        reader.onload = async (e) => {
-            const success = await Storage.importData(e.target.result);
-            if (success) {
+        reader.onload = (e) => {
+            if (Storage.importData(e.target.result)) {
                 alert('数据导入成功');
-                await this.updateStats();
-                await this.renderRecords();
+                this.updateStats();
+                this.renderRecords();
                 this.closeSettingsModal();
             } else {
                 alert('数据导入失败，请检查文件格式');
@@ -420,8 +358,7 @@ const app = {
         input.value = '';
     },
 
-    // 清除所有数据
-    async clearAllData() {
+    clearAllData() {
         if (!confirm('警告：这将清除所有记账数据，不可恢复！\n\n确定要继续吗？')) {
             return;
         }
@@ -430,15 +367,14 @@ const app = {
             return;
         }
         
-        await Storage.clearAllData();
-        await this.updateStats();
-        await this.renderRecords();
+        Storage.clearAllData();
+        this.updateStats();
+        this.renderRecords();
         this.closeSettingsModal();
         alert('数据已清除');
     }
 };
 
-// 启动应用
 document.addEventListener('DOMContentLoaded', () => {
     app.init();
 });

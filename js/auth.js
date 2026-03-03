@@ -1,49 +1,104 @@
 /**
- * Supabase Auth 认证模块
+ * 本地用户认证模块 - Local Auth
  */
 
 const Auth = {
-    // 初始化
-    async init() {
-        const supabase = getSupabase();
-        if (!supabase) return;
-        
-        // 监听认证状态变化
-        supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN') {
-                console.log('User signed in:', session.user.email);
-                if (window.app && window.app.onAuthChange) {
-                    window.app.onAuthChange(true);
-                }
-            } else if (event === 'SIGNED_OUT') {
-                console.log('User signed out');
-                if (window.app && window.app.onAuthChange) {
-                    window.app.onAuthChange(false);
-                }
-            }
-        });
-        
-        // 检查当前会话
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            console.log('Existing session found');
+    // 获取所有用户
+    getAllUsers() {
+        try {
+            const users = localStorage.getItem('accounting_users');
+            return users ? JSON.parse(users) : [];
+        } catch (e) {
+            return [];
         }
+    },
+
+    // 保存用户列表
+    saveUsers(users) {
+        localStorage.setItem('accounting_users', JSON.stringify(users));
+    },
+
+    // 简单密码哈希
+    hashPassword(password) {
+        let hash = 0;
+        for (let i = 0; i < password.length; i++) {
+            const char = password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return 'hash_' + Math.abs(hash).toString(16);
+    },
+
+    // 注册
+    register(email, password, username) {
+        const users = this.getAllUsers();
+        
+        // 检查邮箱是否已存在
+        if (users.find(u => u.email === email)) {
+            return { success: false, message: '邮箱已注册' };
+        }
+        
+        // 检查用户名是否已存在
+        if (users.find(u => u.username === username)) {
+            return { success: false, message: '用户名已存在' };
+        }
+        
+        if (password.length < 6) {
+            return { success: false, message: '密码至少需要6位' };
+        }
+        
+        // 创建用户
+        const user = {
+            id: 'user_' + Date.now(),
+            email,
+            username,
+            password: this.hashPassword(password),
+            createdAt: new Date().toISOString()
+        };
+        
+        users.push(user);
+        this.saveUsers(users);
+        
+        // 自动登录
+        this.setCurrentUser(user);
+        
+        return { success: true, message: '注册成功' };
+    },
+
+    // 登录
+    login(email, password) {
+        const users = this.getAllUsers();
+        
+        // 支持用邮箱或用户名登录
+        const user = users.find(u => u.email === email || u.username === email);
+        
+        if (!user) {
+            return { success: false, message: '用户不存在' };
+        }
+        
+        if (user.password !== this.hashPassword(password)) {
+            return { success: false, message: '密码错误' };
+        }
+        
+        this.setCurrentUser(user);
+        
+        return { success: true, message: '登录成功' };
+    },
+
+    // 退出登录
+    logout() {
+        localStorage.removeItem('accounting_current_user');
+        return true;
     },
 
     // 获取当前用户
     getCurrentUser() {
-        const supabase = getSupabase();
-        if (!supabase) return null;
-        
-        const user = supabase.auth.user();
-        if (user) {
-            return {
-                id: user.id,
-                email: user.email,
-                username: user.user_metadata?.username || user.email?.split('@')[0] || 'User'
-            };
+        try {
+            const user = localStorage.getItem('accounting_current_user');
+            return user ? JSON.parse(user) : null;
+        } catch (e) {
+            return null;
         }
-        return null;
     },
 
     // 获取用户ID
@@ -52,92 +107,24 @@ const Auth = {
         return user ? user.id : null;
     },
 
+    // 设置当前用户
+    setCurrentUser(user) {
+        const sessionUser = {
+            id: user.id,
+            email: user.email,
+            username: user.username
+        };
+        localStorage.setItem('accounting_current_user', JSON.stringify(sessionUser));
+    },
+
     // 检查是否已登录
     isLoggedIn() {
         return this.getCurrentUser() !== null;
     },
 
-    // 注册
-    async register(email, password, username) {
-        const supabase = getSupabase();
-        if (!supabase) return { success: false, message: 'Supabase 未初始化，请检查网络连接' };
-        
-        try {
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        username: username || email.split('@')[0]
-                    }
-                }
-            });
-            
-            if (error) throw error;
-            
-            return { success: true, message: '注册成功！请检查邮箱验证邮件' };
-        } catch (e) {
-            console.error('Register error:', e);
-            // 网络错误特殊处理
-            if (e.message?.includes('fetch') || e.message?.includes('network') || !navigator.onLine) {
-                return { success: false, message: '网络连接失败，请检查网络或尝试使用 VPN/代理访问' };
-            }
-            return { success: false, message: e.message || '注册失败，请稍后重试' };
-        }
-    },
-
-    // 登录
-    async login(email, password) {
-        const supabase = getSupabase();
-        if (!supabase) return { success: false, message: 'Supabase 未初始化，请检查网络连接' };
-        
-        try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
-            
-            if (error) throw error;
-            
-            return { success: true, message: '登录成功' };
-        } catch (e) {
-            console.error('Login error:', e);
-            // 网络错误特殊处理
-            if (e.message?.includes('fetch') || e.message?.includes('network') || !navigator.onLine) {
-                return { success: false, message: '网络连接失败，请检查网络或尝试使用 VPN/代理访问' };
-            }
-            return { success: false, message: e.message || '登录失败，请稍后重试' };
-        }
-    },
-
-    // 退出登录
-    async logout() {
-        const supabase = getSupabase();
-        if (!supabase) return;
-        
-        await supabase.auth.signOut();
-    },
-
-    // 发送密码重置邮件
-    async resetPassword(email) {
-        const supabase = getSupabase();
-        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
-        
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin
-            });
-            
-            if (error) throw error;
-            
-            return { success: true, message: '密码重置邮件已发送' };
-        } catch (e) {
-            return { success: false, message: e.message };
-        }
+    // 初始化
+    init() {
+        // 本地认证无需额外初始化
+        return Promise.resolve();
     }
 };
-
-// 页面加载时初始化
-document.addEventListener('DOMContentLoaded', () => {
-    Auth.init();
-});
