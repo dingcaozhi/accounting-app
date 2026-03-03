@@ -1,0 +1,13 @@
+{
+  "name": "accounting-app",
+  "version": "1.0.0",
+  "description": "个人记账助手 - 收支管理H5应用",
+  "main": "index.html",
+  "scripts": {
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod"
+  },
+  "keywords": ["accounting", "finance", "budget", "h5"],
+  "author": "",
+  "license": "MIT"
+}
