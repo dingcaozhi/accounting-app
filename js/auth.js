@@ -60,7 +60,7 @@ const Auth = {
     // 注册
     async register(email, password, username) {
         const supabase = getSupabase();
-        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
+        if (!supabase) return { success: false, message: 'Supabase 未初始化，请检查网络连接' };
         
         try {
             const { data, error } = await supabase.auth.signUp({
@@ -78,14 +78,18 @@ const Auth = {
             return { success: true, message: '注册成功！请检查邮箱验证邮件' };
         } catch (e) {
             console.error('Register error:', e);
-            return { success: false, message: e.message || '注册失败' };
+            // 网络错误特殊处理
+            if (e.message?.includes('fetch') || e.message?.includes('network') || !navigator.onLine) {
+                return { success: false, message: '网络连接失败，请检查网络或尝试使用 VPN/代理访问' };
+            }
+            return { success: false, message: e.message || '注册失败，请稍后重试' };
         }
     },
 
     // 登录
     async login(email, password) {
         const supabase = getSupabase();
-        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
+        if (!supabase) return { success: false, message: 'Supabase 未初始化，请检查网络连接' };
         
         try {
             const { data, error } = await supabase.auth.signInWithPassword({
@@ -98,7 +102,11 @@ const Auth = {
             return { success: true, message: '登录成功' };
         } catch (e) {
             console.error('Login error:', e);
-            return { success: false, message: e.message || '登录失败' };
+            // 网络错误特殊处理
+            if (e.message?.includes('fetch') || e.message?.includes('network') || !navigator.onLine) {
+                return { success: false, message: '网络连接失败，请检查网络或尝试使用 VPN/代理访问' };
+            }
+            return { success: false, message: e.message || '登录失败，请稍后重试' };
         }
     },
 
