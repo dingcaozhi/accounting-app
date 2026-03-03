@@ -1,0 +1,48 @@
+functionsDirectory = "/Users/dingcaozhi/.openclaw/workspace/accounting-app/netlify/functions"
+functionsDirectoryOrigin = "default"
+headersOrigin = "config"
+plugins = []
+redirects = []
+
+[build]
+publish = "/Users/dingcaozhi/.openclaw/workspace/accounting-app"
+publishOrigin = "config"
+functions = "/Users/dingcaozhi/.openclaw/workspace/accounting-app/netlify/functions"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+X-Frame-Options = "DENY"
+X-XSS-Protection = "1; mode=block"
+X-Content-Type-Options = "nosniff"
+
+[[headers]]
+for = "*.js"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000"
+
+[[headers]]
+for = "*.css"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000"

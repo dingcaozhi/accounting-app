@@ -33,34 +33,24 @@ const app = {
         document.getElementById('mainPage').classList.remove('hidden');
         
         const user = Auth.getCurrentUser();
-        document.getElementById('currentUser').textContent = user.username;
+        document.getElementById('currentUser').textContent = user ? user.username : 'User';
         
         this.updateStats();
         this.renderRecords();
     },
 
+    // Netlify Identity 登录回调
+    onNetlifyLogin(user) {
+        this.showMainPage();
+    },
+
+    // Netlify Identity 登出回调
+    onNetlifyLogout() {
+        this.showAuthPage();
+    },
+
     // 绑定事件
     bindEvents() {
-        // 登录/注册标签切换
-        document.querySelectorAll('.auth-tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const targetTab = e.target.dataset.tab;
-                this.switchAuthTab(targetTab);
-            });
-        });
-
-        // 登录表单
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleLogin();
-        });
-
-        // 注册表单
-        document.getElementById('registerForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleRegister();
-        });
-
         // 筛选标签
         document.querySelectorAll('.filter-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
@@ -91,62 +81,10 @@ const app = {
         });
     },
 
-    // 切换登录/注册标签
-    switchAuthTab(tab) {
-        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-        document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-        
-        if (tab === 'login') {
-            document.getElementById('loginForm').classList.remove('hidden');
-            document.getElementById('registerForm').classList.add('hidden');
-        } else {
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('registerForm').classList.remove('hidden');
-        }
-    },
-
-    // 处理登录
-    handleLogin() {
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        
-        const result = Auth.login(username, password);
-        
-        if (result.success) {
-            this.showMainPage();
-            document.getElementById('loginForm').reset();
-        } else {
-            alert(result.message);
-        }
-    },
-
-    // 处理注册
-    handleRegister() {
-        const username = document.getElementById('regUsername').value.trim();
-        const password = document.getElementById('regPassword').value;
-        const confirmPassword = document.getElementById('regConfirmPassword').value;
-        
-        if (password !== confirmPassword) {
-            alert('两次输入的密码不一致');
-            return;
-        }
-        
-        const result = Auth.register(username, password);
-        
-        if (result.success) {
-            alert(result.message);
-            this.showMainPage();
-            document.getElementById('registerForm').reset();
-        } else {
-            alert(result.message);
-        }
-    },
-
     // 退出登录
     logout() {
         if (confirm('确定要退出登录吗？')) {
             Auth.logout();
-            this.showAuthPage();
         }
     },
 
@@ -181,11 +119,11 @@ const app = {
         
         if (records.length === 0) {
             container.innerHTML = `
-                \u003cdiv class="empty-state">
-                    \u003cdiv class="empty-state-icon">📝\u003c/div\u003e
-                    \u003ch3>还没有记录\u003c/h3\u003e
-                    \u003cp>点击下方的按钮记一笔吧\u003c/p\u003e
-                \u003c/div\u003e
+                <div class="empty-state">
+                    <div class="empty-state-icon">📝</div>
+                    <h3>还没有记录</h3>
+                    <p>点击下方的按钮记一笔吧</p>
+                </div>
             `;
             return;
         }
@@ -196,20 +134,20 @@ const app = {
             const amountSign = record.type === 'income' ? '+' : '-';
             
             return `
-                \u003cdiv class="record-item ${record.type}">
-                    \u003cdiv class="record-icon">${icon}\u003c/div\u003e
-                    \u003cdiv class="record-info">
-                        \u003cdiv class="record-category">${record.category}\u003c/div\u003e
-                        ${record.remark ? `\u003cdiv class="record-remark">${record.remark}\u003c/div\u003e` : ''}
-                        \u003cdiv class="record-date">${this.formatDate(record.date)}\u003c/div\u003e
-                    \u003c/div\u003e
-                    \u003cdiv class="record-amount ${amountClass}">
+                <div class="record-item ${record.type}">
+                    <div class="record-icon">${icon}</div>
+                    <div class="record-info">
+                        <div class="record-category">${record.category}</div>
+                        ${record.remark ? `<div class="record-remark">${record.remark}</div>` : ''}
+                        <div class="record-date">${this.formatDate(record.date)}</div>
+                    </div>
+                    <div class="record-amount ${amountClass}">
                         ${amountSign}¥${parseFloat(record.amount).toFixed(2)}
-                    \u003c/div\u003e
-                    \u003cdiv class="record-actions">
-                        \u003cbutton class="btn-delete" onclick="app.confirmDelete('${record.id}')">🗑️\u003c/button\u003e
-                    \u003c/div\u003e
-                \u003c/div\u003e
+                    </div>
+                    <div class="record-actions">
+                        <button class="btn-delete" onclick="app.confirmDelete('${record.id}')">🗑️</button>
+                    </div>
+                </div>
             `;
         }).join('');
     },

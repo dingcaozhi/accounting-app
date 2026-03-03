@@ -6,8 +6,8 @@
 const Storage = {
     // 获取当前用户的数据命名空间
     getNamespace() {
-        const user = Auth.getCurrentUser();
-        return user ? `accounting_${user.username}` : 'accounting_guest';
+        const userId = Auth.getUserId();
+        return userId ? `accounting_${userId}` : 'accounting_guest';
     },
 
     // 获取完整的数据结构

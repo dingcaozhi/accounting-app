@@ -193,6 +193,28 @@ body {
     background: var(--bg);
 }
 
+/* Netlify Identity 登录 */
+.auth-content {
+    text-align: center;
+}
+
+.auth-desc {
+    color: var(--text-light);
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.btn-login {
+    padding: 16px 32px;
+    font-size: 16px;
+    margin-bottom: 16px;
+}
+
+.auth-hint {
+    font-size: 13px;
+    color: var(--text-light);
+}
+
 /* 主应用页面 */
 .header {
     display: flex;
