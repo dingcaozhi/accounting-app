@@ -1,47 +1,55 @@
 /**
- * Netlify Identity 认证模块
+ * Supabase Auth 认证模块
  */
 
 const Auth = {
     // 初始化
-    init() {
-        // 监听Netlify Identity事件
-        if (window.netlifyIdentity) {
-            netlifyIdentity.on('init', user => {
-                if (user) {
-                    console.log('Netlify Identity initialized with user:', user.email);
+    async init() {
+        const supabase = getSupabase();
+        if (!supabase) return;
+        
+        // 监听认证状态变化
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN') {
+                console.log('User signed in:', session.user.email);
+                if (window.app && window.app.onAuthChange) {
+                    window.app.onAuthChange(true);
                 }
-            });
-
-            netlifyIdentity.on('login', user => {
-                console.log('User logged in:', user.email);
-                this.onLogin(user);
-            });
-
-            netlifyIdentity.on('logout', () => {
-                console.log('User logged out');
-                this.onLogout();
-            });
-
-            netlifyIdentity.on('error', err => {
-                console.error('Netlify Identity error:', err);
-            });
+            } else if (event === 'SIGNED_OUT') {
+                console.log('User signed out');
+                if (window.app && window.app.onAuthChange) {
+                    window.app.onAuthChange(false);
+                }
+            }
+        });
+        
+        // 检查当前会话
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            console.log('Existing session found');
         }
     },
 
     // 获取当前用户
     getCurrentUser() {
-        if (window.netlifyIdentity) {
-            const user = netlifyIdentity.currentUser();
-            if (user) {
-                return {
-                    id: user.id,
-                    email: user.email,
-                    username: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
-                };
-            }
+        const supabase = getSupabase();
+        if (!supabase) return null;
+        
+        const user = supabase.auth.user();
+        if (user) {
+            return {
+                id: user.id,
+                email: user.email,
+                username: user.user_metadata?.username || user.email?.split('@')[0] || 'User'
+            };
         }
         return null;
+    },
+
+    // 获取用户ID
+    getUserId() {
+        const user = this.getCurrentUser();
+        return user ? user.id : null;
     },
 
     // 检查是否已登录
@@ -49,53 +57,74 @@ const Auth = {
         return this.getCurrentUser() !== null;
     },
 
-    // 获取用户ID（用于数据存储隔离）
-    getUserId() {
-        const user = this.getCurrentUser();
-        return user ? user.id : null;
-    },
-
-    // 登录回调
-    onLogin(user) {
-        // 关闭Identity弹窗
-        netlifyIdentity.close();
+    // 注册
+    async register(email, password, username) {
+        const supabase = getSupabase();
+        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
         
-        // 触发应用登录成功事件
-        if (window.app && window.app.onNetlifyLogin) {
-            window.app.onNetlifyLogin(this.getCurrentUser());
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        username: username || email.split('@')[0]
+                    }
+                }
+            });
+            
+            if (error) throw error;
+            
+            return { success: true, message: '注册成功！请检查邮箱验证邮件' };
+        } catch (e) {
+            console.error('Register error:', e);
+            return { success: false, message: e.message || '注册失败' };
         }
     },
 
-    // 退出回调
-    onLogout() {
-        // 触发应用退出事件
-        if (window.app && window.app.onNetlifyLogout) {
-            window.app.onNetlifyLogout();
+    // 登录
+    async login(email, password) {
+        const supabase = getSupabase();
+        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
+        
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+            
+            if (error) throw error;
+            
+            return { success: true, message: '登录成功' };
+        } catch (e) {
+            console.error('Login error:', e);
+            return { success: false, message: e.message || '登录失败' };
         }
     },
 
     // 退出登录
-    logout() {
-        if (window.netlifyIdentity) {
-            netlifyIdentity.logout();
-        }
+    async logout() {
+        const supabase = getSupabase();
+        if (!supabase) return;
+        
+        await supabase.auth.signOut();
     },
 
-    // 打开登录弹窗
-    openLogin() {
-        if (window.netlifyIdentity) {
-            netlifyIdentity.open('login');
-        } else {
-            alert('Netlify Identity 加载中，请稍后再试');
-        }
-    },
-
-    // 打开注册弹窗
-    openSignup() {
-        if (window.netlifyIdentity) {
-            netlifyIdentity.open('signup');
-        } else {
-            alert('Netlify Identity 加载中，请稍后再试');
+    // 发送密码重置邮件
+    async resetPassword(email) {
+        const supabase = getSupabase();
+        if (!supabase) return { success: false, message: 'Supabase 未初始化' };
+        
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin
+            });
+            
+            if (error) throw error;
+            
+            return { success: true, message: '密码重置邮件已发送' };
+        } catch (e) {
+            return { success: false, message: e.message };
         }
     }
 };
